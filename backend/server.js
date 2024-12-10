@@ -16,29 +16,27 @@ console.log(process.env.CLIENT_SECRET);
 const TICKETMASTER_API_KEY = process.env.TICKETMASTER_API_KEY;
 console.log(process.env.TICKETMASTER_API_KEY);
 
-const REDIRECT_URI = 'http://localhost:3000/callback';
+const REDIRECT_URI = `http://localhost:${PORT}/callback`;
 
-// Spotify Authorization URL
+// Spotify Url
 const AUTH_URL = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(
   REDIRECT_URI
 )}&scope=user-read-private%20user-read-email`;
 
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '../frontend')));
 
-
-// Middleware to configure sessions
 app.use(session({
   secret: 'your-secret-key',
   resave: false,
   saveUninitialized: true,
 }));
 
-// MongoDB connection URI and client
+// Database
 const uri = `mongodb://localhost:${MONGODB_PORT}`;
 const client = new MongoClient(uri);
 let db;
 
-// Connect to MongoDB
 client.connect()
   .then(() => {
     console.log('Connected to MongoDB');
@@ -48,20 +46,19 @@ client.connect()
     console.error('Failed to connect to MongoDB:', err);
   });
 
+// Collect information from Ticketmaster
 fetchTicketmasterInfo();
 
-// Serve frontend files
-app.use(express.static(path.join(__dirname, '../frontend')));
+
 
 app.get('/login', (req, res) => {
   res.redirect(AUTH_URL); // Redirect user to Spotify login
 });
 
-// Callback endpoint
+
 app.get('/callback', async (req, res) => {
   const code = req.query.code;
 
-  // Exchange code for access token
   const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',
     headers: {
@@ -82,6 +79,25 @@ app.get('/callback', async (req, res) => {
   console.log(access_token);
   req.session.access_token = tokenData.access_token;
 
+
+  const profile = await fetchProfile(access_token);
+  console.log(profile);
+  
+  req.session.userId = profile.id;
+  try {
+    const collection = db.collection('users');
+    const existingUser = await collection.findOne({ id: profile.id });
+    if (!existingUser) {
+      const result = await collection.insertOne(profile);
+      console.log("User data saved to database");
+    } else {
+      console.log("User already exists in the database");
+    }
+  } catch (err) {
+    console.error('Error saving data:', err);
+    res.status(500).json({ message: 'Failed to save data' });
+  }
+
   res.redirect(`/home`);
 });
 
@@ -95,44 +111,16 @@ app.get('/api-info', (req, res) => {
 
 app.get('/home_user_info', async (req, res) => {
 
-  access_token = req.session.access_token;
-  const profile = await fetchProfile(access_token);
-  console.log(profile);
+  userId = req.session.userId;
 
-  try {
-    const collection = db.collection('users');
-    const data = profile; 
-    const existingUser = await collection.findOne({ id: profile.id });
-    if (!existingUser) {
-      const result = await collection.insertOne(profile);
-      console.log("User data saved to database");
-    } else {
-      console.log("User already exists in the database");
-    }
-    res.json(profile)
-  } catch (err) {
-    console.error('Error saving data:', err);
-    res.status(500).json({ message: 'Failed to save data' });
-  }
+  const collection = db.collection('users');
+  const user = await collection.findOne({ id: userId });
+  console.log(user);
 
-  
+  res.json(user);
 });
-
-app.get('/api/data', async (req, res) => {
-  const data = await db.collection('globalData').find().toArray();
-  res.json(data);
-});
-
-app.delete('/api/data/:id', async (req, res) => {
-  const id = req.params.id;
-  await db.collection('globalData').deleteOne({ _id: new ObjectId(id) });
-  res.status(200).send('Deleted');
-});
-
-
 
 app.get('/ticketmaster/concerts', async (req, res) => {
-  // const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${TICKETMASTER_API_KEY}&size=200`;
   try {
     const ticketmasterCollection = db.collection('ticketmaster');
     const info = await ticketmasterCollection.find().toArray();
@@ -142,6 +130,14 @@ app.get('/ticketmaster/concerts', async (req, res) => {
   }
 });
 
+// Helper functions
+async function fetchProfile(token) {
+    const result = await fetch("https://api.spotify.com/v1/me", {
+        method: "GET", headers: { Authorization: `Bearer ${token}` }
+    });
+
+    return await result.json();
+}
 
 async function fetchTicketmasterInfo(){
   const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${TICKETMASTER_API_KEY}&size=200`;
@@ -161,16 +157,15 @@ async function fetchTicketmasterInfo(){
           url: event.url,
         };
 
-        // Check if the concert already exists in the database based on the unique properties
         const existingConcert = await ticketmasterCollection.findOne({ name: concert.name, date: concert.date, venue: concert.venue });
 
         if (!existingConcert) {
-          // If the concert doesn't exist, insert it into the database
           await ticketmasterCollection.insertOne(concert);
-          console.log(`Inserted concert: ${concert.name} at ${concert.venue}`);
-        } else {
-          console.log(`Concert already exists: ${concert.name} at ${concert.venue}`);
+          // console.log(`Inserted concert: ${concert.name} at ${concert.venue}`);
         }
+        // } else {
+        //   // console.log(`Concert already exists: ${concert.name} at ${concert.venue}`);
+        // }
       }
 
     } else {
@@ -181,16 +176,6 @@ async function fetchTicketmasterInfo(){
   }
 }
 
-// Start server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
-
-// Helper functions
-async function fetchProfile(token) {
-    const result = await fetch("https://api.spotify.com/v1/me", {
-        method: "GET", headers: { Authorization: `Bearer ${token}` }
-    });
-
-    return await result.json();
-}
