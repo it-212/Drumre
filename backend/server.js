@@ -48,6 +48,7 @@ client.connect()
     console.error('Failed to connect to MongoDB:', err);
   });
 
+fetchTicketmasterInfo();
 
 // Serve frontend files
 app.use(express.static(path.join(__dirname, '../frontend')));
@@ -126,6 +127,18 @@ app.delete('/api/data/:id', async (req, res) => {
 
 
 app.get('/ticketmaster/concerts', async (req, res) => {
+  // const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${TICKETMASTER_API_KEY}&size=200`;
+  try {
+    const ticketmasterCollection = db.collection('ticketmaster');
+    const info = await ticketmasterCollection.find().toArray();
+    res.json(info);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching data', error });
+  }
+});
+
+
+async function fetchTicketmasterInfo(){
   const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${TICKETMASTER_API_KEY}&size=200`;
   try {
     const response = await fetch(url);
@@ -141,34 +154,29 @@ app.get('/ticketmaster/concerts', async (req, res) => {
         price: event.priceRanges ? event.priceRanges[0].currency + ' ' + event.priceRanges[0].min + '-' + event.priceRanges[0].max : 'N/A',
         url: event.url
       }));
-    console.log(formattedData);
+      console.log(formattedData);
+      saveToDatabase(formattedData);
 
-      res.json(formattedData);
     } else {
       res.status(404).json({ message: 'No concerts found' });
     }
   } catch (error) {
     res.status(500).json({ message: 'Error fetching data', error });
   }
-});
+}
 
 
-// async function fetchTicketmasterInfo(){
+async function saveToDatabase(info) {
+  try {
+    const ticketmasterCollection = db.collection('ticketmaster');
 
-// }
-
-
-// async function saveConcertsToDatabase(concerts) {
-//   try {
-//     const concertsCollection = db.collection('concerts');
-
-//     // Insert concert data into the collection
-//     const result = await concertsCollection.insertMany(concerts);
-//     console.log('Concert data saved:', result);
-//   } catch (error) {
-//     console.error('Error saving concert data:', error);
-//   }
-// }
+    // Insert concert data into the collection
+    const result = await ticketmasterCollection.insertMany(info);
+    console.log('Data saved:', result);
+  } catch (error) {
+    console.error('Error saving concert data:', error);
+  }
+}
 
 
 
