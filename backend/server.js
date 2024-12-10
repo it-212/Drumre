@@ -145,17 +145,28 @@ async function fetchTicketmasterInfo(){
     const data = await response.json();
     console.log(data);
     if (data._embedded && data._embedded.events) {
-      const formattedData = data._embedded.events.map(event => ({
-        name: event.name,
-        location: event._embedded.venues[0]?.city?.name || 'Unknown',
-        date: event.dates.start.localDate,
-        time: event.dates.start.localTime || 'TBD',
-        venue: event._embedded.venues[0]?.name || 'Unknown',
-        price: event.priceRanges ? event.priceRanges[0].currency + ' ' + event.priceRanges[0].min + '-' + event.priceRanges[0].max : 'N/A',
-        url: event.url
-      }));
-      console.log(formattedData);
-      saveToDatabase(formattedData);
+      const ticketmasterCollection = db.collection('ticketmaster');
+      for (const event of data._embedded.events) {
+        const concert = {
+          name: event.name,
+          date: event.dates.start.localDate,
+          time: event.dates.start.localTime,
+          venue: event._embedded.venues[0].name,
+          location: event._embedded.venues[0].city.name,
+          url: event.url,
+        };
+
+        // Check if the concert already exists in the database based on the unique properties
+        const existingConcert = await ticketmasterCollection.findOne({ name: concert.name, date: concert.date, venue: concert.venue });
+
+        if (!existingConcert) {
+          // If the concert doesn't exist, insert it into the database
+          await ticketmasterCollection.insertOne(concert);
+          console.log(`Inserted concert: ${concert.name} at ${concert.venue}`);
+        } else {
+          console.log(`Concert already exists: ${concert.name} at ${concert.venue}`);
+        }
+      }
 
     } else {
       res.status(404).json({ message: 'No concerts found' });
@@ -164,21 +175,6 @@ async function fetchTicketmasterInfo(){
     res.status(500).json({ message: 'Error fetching data', error });
   }
 }
-
-
-async function saveToDatabase(info) {
-  try {
-    const ticketmasterCollection = db.collection('ticketmaster');
-
-    // Insert concert data into the collection
-    const result = await ticketmasterCollection.insertMany(info);
-    console.log('Data saved:', result);
-  } catch (error) {
-    console.error('Error saving concert data:', error);
-  }
-}
-
-
 
 // Start server
 app.listen(PORT, () => {
