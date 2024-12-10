@@ -1,3 +1,7 @@
+document.getElementById("apiInfoButton").addEventListener("click", function () {
+  window.location.href = "/api-info";
+});
+
 fetch('/home_user_info')
   .then((response) => response.json())
   .then((data) => {

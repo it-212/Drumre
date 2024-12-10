@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Information</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>API Information</h1>
+    <p>Below is the information retrieved from our APIs.</p>
+    
+    <!-- Table for Displaying Data -->
+    <table id="dataTable" class="data-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Location</th>
+          <th>Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Rows will be dynamically inserted here -->
+      </tbody>
+    </table>
+    
+    <!-- Script for Data Manipulation -->
+    <script>
+      // Fetch and render data from the backend
+      fetch('/api/data')
+        .then((response) => response.json())
+        .then((data) => renderData(data));
+
+      // Render data in the table
+      function renderData(data) {
+        const tableBody = document.getElementById('dataTable').querySelector('tbody');
+        tableBody.innerHTML = ''; // Clear existing data
+        data.forEach((item) => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${item.name}</td>
+            <td>${item.location}</td>
+            <td>${item.date}</td>
+            <td>
+              <button onclick="deleteData('${item._id}')">Delete</button>
+            </td>
+          `;
+          tableBody.appendChild(row);
+        });
+      }
+
+      // Function to delete data
+      function deleteData(id) {
+        fetch(`/api/data/${id}`, { method: 'DELETE' })
+          .then(() => alert('Data deleted successfully!'))
+          .then(() => location.reload());
+      }
+    </script>
+  </div>
+</body>
+</html>

@@ -2,7 +2,10 @@ const express = require('express');
 const app = express();
 const path = require('path');
 const session = require('express-session');
+// const fetch = require('node-fetch');
+const { MongoClient } = require('mongodb');
 const PORT = 3000;
+const MONGODB_PORT = 27017;
 require('dotenv').config();
 
 // Spotify app credentials (set these in .env file)
@@ -10,6 +13,9 @@ const CLIENT_ID = process.env.CLIENT_ID;
 console.log(process.env.CLIENT_ID);
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 console.log(process.env.CLIENT_SECRET);
+const TICKETMASTER_API_KEY = process.env.TICKETMASTER_API_KEY;
+console.log(process.env.TICKETMASTER_API_KEY);
+
 const REDIRECT_URI = 'http://localhost:3000/callback';
 
 // Spotify Authorization URL
@@ -26,6 +32,22 @@ app.use(session({
   resave: false,
   saveUninitialized: true,
 }));
+
+// MongoDB connection URI and client
+const uri = `mongodb://localhost:${MONGODB_PORT}`; // Replace with your MongoDB URI
+const client = new MongoClient(uri);
+let db;
+
+// Connect to MongoDB
+client.connect()
+  .then(() => {
+    console.log('Connected to MongoDB');
+    db = client.db('drumre'); // Replace 'mydatabase' with your database name
+  })
+  .catch(err => {
+    console.error('Failed to connect to MongoDB:', err);
+  });
+
 
 // Serve frontend files
 app.use(express.static(path.join(__dirname, '../frontend')));
@@ -59,13 +81,15 @@ app.get('/callback', async (req, res) => {
   console.log(access_token);
   req.session.access_token = tokenData.access_token;
 
-  const profile = await fetchProfile(access_token);
-  console.log(profile);
   res.redirect(`/home`);
 });
 
 app.get('/home', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/home.html'));
+});
+
+app.get('/api-info', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/api.html'));
 });
 
 app.get('/home_user_info', async (req, res) => {
@@ -74,8 +98,57 @@ app.get('/home_user_info', async (req, res) => {
   const profile = await fetchProfile(access_token);
   console.log(profile);
 
-  res.json(profile)
+  try {
+    const collection = db.collection('users');
+    const data = profile; 
+    const result = await collection.insertOne(data); 
+    console.log("User data saved to database");
+    res.json(profile)
+  } catch (err) {
+    console.error('Error saving data:', err);
+    res.status(500).json({ message: 'Failed to save data' });
+  }
+
+  
 });
+
+app.get('/api/data', async (req, res) => {
+  const data = await db.collection('globalData').find().toArray();
+  res.json(data);
+});
+
+app.delete('/api/data/:id', async (req, res) => {
+  const id = req.params.id;
+  await db.collection('globalData').deleteOne({ _id: new ObjectId(id) });
+  res.status(200).send('Deleted');
+});
+
+
+
+app.get('/api/concerts', async (req, res) => {
+  const location = req.query.location || 'Croatia'; // Default to Croatia
+  const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${TICKETMASTER_API_KEY}&countryCode=HR&keyword=${location}`;
+  
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    if (data._embedded && data._embedded.events) {
+      res.json(data._embedded.events.map(event => ({
+        name: event.name,
+        location: event._embedded.venues[0].city.name,
+        date: event.dates.start.localDate,
+      })));
+    } else {
+      res.status(404).json({ message: 'No concerts found' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching data', error });
+  }
+});
+
+
+
+
 
 // Start server
 app.listen(PORT, () => {
