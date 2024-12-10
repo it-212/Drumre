@@ -1,9 +1,9 @@
 const express = require('express');
 const app = express();
 const path = require('path');
-require('dotenv').config();
-
+const session = require('express-session');
 const PORT = 3000;
+require('dotenv').config();
 
 // Spotify app credentials (set these in .env file)
 const CLIENT_ID = process.env.CLIENT_ID;
@@ -19,10 +19,17 @@ const AUTH_URL = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&
 
 app.use(express.json());
 
+
+// Middleware to configure sessions
+app.use(session({
+  secret: 'your-secret-key',
+  resave: false,
+  saveUninitialized: true,
+}));
+
 // Serve frontend files
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// Login endpoint
 app.get('/login', (req, res) => {
   res.redirect(AUTH_URL); // Redirect user to Spotify login
 });
@@ -42,17 +49,44 @@ app.get('/callback', async (req, res) => {
     body: new URLSearchParams({
       grant_type: 'authorization_code',
       code: code,
+      clientId: CLIENT_ID,
       redirect_uri: REDIRECT_URI,
     }),
   });
 
   const tokenData = await tokenResponse.json();
   const { access_token } = tokenData;
+  console.log(access_token);
+  req.session.access_token = tokenData.access_token;
 
-  res.redirect(`/home.html`);
+  const profile = await fetchProfile(access_token);
+  console.log(profile);
+  res.redirect(`/home`);
+});
+
+app.get('/home', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/home.html'));
+});
+
+app.get('/home_user_info', async (req, res) => {
+
+  access_token = req.session.access_token;
+  const profile = await fetchProfile(access_token);
+  console.log(profile);
+
+  res.json(profile)
 });
 
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
+
+// Helper functions
+async function fetchProfile(token) {
+    const result = await fetch("https://api.spotify.com/v1/me", {
+        method: "GET", headers: { Authorization: `Bearer ${token}` }
+    });
+
+    return await result.json();
+}
