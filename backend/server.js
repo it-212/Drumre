@@ -125,19 +125,25 @@ app.delete('/api/data/:id', async (req, res) => {
 
 
 
-app.get('/api/concerts', async (req, res) => {
-  const location = req.query.location || 'Croatia'; // Default to Croatia
-  const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${TICKETMASTER_API_KEY}&countryCode=HR&keyword=${location}`;
-  
+app.get('/ticketmaster/concerts', async (req, res) => {
+  const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${TICKETMASTER_API_KEY}&size=200`;
   try {
     const response = await fetch(url);
     const data = await response.json();
+    console.log(data);
     if (data._embedded && data._embedded.events) {
-      res.json(data._embedded.events.map(event => ({
+      const formattedData = data._embedded.events.map(event => ({
         name: event.name,
-        location: event._embedded.venues[0].city.name,
+        location: event._embedded.venues[0]?.city?.name || 'Unknown',
         date: event.dates.start.localDate,
-      })));
+        time: event.dates.start.localTime || 'TBD',
+        venue: event._embedded.venues[0]?.name || 'Unknown',
+        price: event.priceRanges ? event.priceRanges[0].currency + ' ' + event.priceRanges[0].min + '-' + event.priceRanges[0].max : 'N/A',
+        url: event.url
+      }));
+    console.log(formattedData);
+
+      res.json(formattedData);
     } else {
       res.status(404).json({ message: 'No concerts found' });
     }
@@ -147,6 +153,22 @@ app.get('/api/concerts', async (req, res) => {
 });
 
 
+// async function fetchTicketmasterInfo(){
+
+// }
+
+
+// async function saveConcertsToDatabase(concerts) {
+//   try {
+//     const concertsCollection = db.collection('concerts');
+
+//     // Insert concert data into the collection
+//     const result = await concertsCollection.insertMany(concerts);
+//     console.log('Concert data saved:', result);
+//   } catch (error) {
+//     console.error('Error saving concert data:', error);
+//   }
+// }
 
 
 

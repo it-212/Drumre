@@ -12,7 +12,7 @@
     <p>Below is the information retrieved from our APIs.</p>
     
     <!-- Table for Displaying Data -->
-    <table id="dataTable" class="data-table">
+    <table id="ticketmasterDataTable" class="data-table">
       <thead>
         <tr>
           <th>Name</th>
@@ -26,38 +26,7 @@
       </tbody>
     </table>
     
-    <!-- Script for Data Manipulation -->
-    <script>
-      // Fetch and render data from the backend
-      fetch('/api/data')
-        .then((response) => response.json())
-        .then((data) => renderData(data));
-
-      // Render data in the table
-      function renderData(data) {
-        const tableBody = document.getElementById('dataTable').querySelector('tbody');
-        tableBody.innerHTML = ''; // Clear existing data
-        data.forEach((item) => {
-          const row = document.createElement('tr');
-          row.innerHTML = `
-            <td>${item.name}</td>
-            <td>${item.location}</td>
-            <td>${item.date}</td>
-            <td>
-              <button onclick="deleteData('${item._id}')">Delete</button>
-            </td>
-          `;
-          tableBody.appendChild(row);
-        });
-      }
-
-      // Function to delete data
-      function deleteData(id) {
-        fetch(`/api/data/${id}`, { method: 'DELETE' })
-          .then(() => alert('Data deleted successfully!'))
-          .then(() => location.reload());
-      }
-    </script>
+    <script src="api.js"></script>
   </div>
 </body>
 </html>
