@@ -34,7 +34,7 @@ app.use(session({
 }));
 
 // MongoDB connection URI and client
-const uri = `mongodb://localhost:${MONGODB_PORT}`; // Replace with your MongoDB URI
+const uri = `mongodb://localhost:${MONGODB_PORT}`;
 const client = new MongoClient(uri);
 let db;
 
@@ -42,7 +42,7 @@ let db;
 client.connect()
   .then(() => {
     console.log('Connected to MongoDB');
-    db = client.db('drumre'); // Replace 'mydatabase' with your database name
+    db = client.db('drumre'); 
   })
   .catch(err => {
     console.error('Failed to connect to MongoDB:', err);
@@ -102,8 +102,13 @@ app.get('/home_user_info', async (req, res) => {
   try {
     const collection = db.collection('users');
     const data = profile; 
-    const result = await collection.insertOne(data); 
-    console.log("User data saved to database");
+    const existingUser = await collection.findOne({ id: profile.id });
+    if (!existingUser) {
+      const result = await collection.insertOne(profile);
+      console.log("User data saved to database");
+    } else {
+      console.log("User already exists in the database");
+    }
     res.json(profile)
   } catch (err) {
     console.error('Error saving data:', err);
